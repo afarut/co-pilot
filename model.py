@@ -8,7 +8,7 @@ warnings.filterwarnings("ignore")
 
 
 class CoPilot:
-	def __init__(self, alpha=0.0001, e=0.5):
+	def __init__(self, alpha=0.01, e=0.2):
 		self.e = e
 		self.alpha = alpha
 
@@ -117,9 +117,6 @@ class CoPilot:
 			generated_ids = self.mistral.generate(model_inputs, max_new_tokens=30, do_sample=True, pad_token_id=self.mistral_tokenizer.pad_token_id, eos_token_id=self.mistral_tokenizer.eos_token_id)
 			decoded = self.mistral_tokenizer.batch_decode(generated_ids)
 			text = decoded[0]
-			print('*******************')
-			print(decoded)
-			print('*******************')
 			return {"status": "random", "text": text, "class": -1}
 
 
