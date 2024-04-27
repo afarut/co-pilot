@@ -1,19 +1,18 @@
 import torch
 from torch.nn.functional import softmax
-from utils import get_categories
+from utils import get_categories, get_summars
 from classifier import RubertTinyClassifier
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM
 import warnings
 warnings.filterwarnings("ignore")
 
 
 class CoPilot:
-	def __init__(self, alpha=0.00003, e=0.000001):
+	def __init__(self, alpha=0.0001, e=0.5):
 		self.e = e
 		self.alpha = alpha
 
-		if self.e >= self.alpha:
-			raise Exception("Ошибка установки констант, self.alpha должен быть больше e")
+		
 
 		self.categories = get_categories("./datasets/orig_train_data.csv")
 		self.categoriy_label = [
@@ -28,13 +27,25 @@ class CoPilot:
 		 "Оценки", 
 		 "Практические работы"]
 
+		self.summars = get_summars("./datasets/summans.csv")
+
+		if torch.cuda.is_available():
+			self.device = "cuda"
+		else:
+			self.device = "cpu"
+
 		
-		self.answer_classifier = RubertTinyClassifier(30)
+		self.answer_classifier = RubertTinyClassifier(30).to(self.device)
 		self.answer_classifier.load_state_dict(torch.load("./weights/RuBertAnswer.pt"))
 
-		self.category_classifier = RubertTinyClassifier(10)
+		self.category_classifier = RubertTinyClassifier(10).to(self.device)
 		self.category_classifier.load_state_dict(torch.load("./weights/RuBertCategory.pt"))
 		self.tokenizer = AutoTokenizer.from_pretrained("cointegrated/rubert-tiny2")
+
+		self.mistral = AutoModelForCausalLM.from_pretrained("mistralai/Mistral-7B-Instruct-v0.2").to(self.device)
+		self.mistral_tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-Instruct-v0.2")
+
+
 
 	def __call__(self, question: str, machine_state: bool=True) -> int:
 		# machine state доп вопрос
@@ -44,7 +55,7 @@ class CoPilot:
 		# class == -2 К куратору
 		# Иначе предсказанный класс
 
-		data = self.tokenizer(question, padding=True, truncation=True, return_tensors='pt')
+		data = self.tokenizer(question, padding=True, truncation=True, return_tensors='pt').to(self.device)
 		
 		answer_logits = self.answer_classifier(**data).squeeze()
 		category_logits = self.category_classifier(**data).squeeze()
@@ -93,18 +104,38 @@ class CoPilot:
 					return {"status": "random", "text": "Нужен доп вопрос, Категории не соответствует классам ответов", "class": -1}
 				else:
 					return {"status": "error", "text": "Категория не соответствует классам ответов. К куратору", "class": -2}
-			return {"status": "random", "text": "Среди предсказанных классов ответов есть нужный нам, но он не один", "class": -1}
+			answer_summars = []
+			
+			for id, answer in answers:
+				answer_summars.append(self.summars[id])
+			result_str = "\"" + "\", \"".join(answer_summars[:-1]) + "\""
+			result_str = f"{result_str}, и {answer_summars[-1]}\""
+			promt = f'студент задает вопрос в бот обратной связи.\n вопрос студента: "{question}",\nварианты ответов: {result_str}\nв Напиши уточняющий вопрос к вопросу студента, Чтобы понять что конкретно его интересует. \n Ты задаешь вопрос от лица чат бота студенту для разьяснения того, какой ответ ему предоставить'
+			messages = [{"role": "user", "content": promt},]
+			encodeds = self.mistral_tokenizer.apply_chat_template(messages, return_tensors="pt")
+			model_inputs = encodeds.to(self.device)
+			generated_ids = self.mistral.generate(model_inputs, max_new_tokens=30, do_sample=True, pad_token_id=self.mistral_tokenizer.pad_token_id, eos_token_id=self.mistral_tokenizer.eos_token_id)
+			decoded = self.mistral_tokenizer.batch_decode(generated_ids)
+			text = decoded[0]
+			print('*******************')
+			print(decoded)
+			print('*******************')
+			return {"status": "random", "text": text, "class": -1}
 
 
 if __name__ == "__main__":
-	model = CoPilot()
-	print("---------------")
-	s = input()
-	data = model(s)
-	while data["class"] < 0:
-		print("text:", data["text"], "class:", data["class"])
-		s = s + " " + input()
-		data = model(s, machine_state=False)
+  try:
+    while 1:
+      model = CoPilot()
+      print("---------------")
+      s = input()
+      data = model(s)
+      while data["class"] < 0:
+        print("text:", data["text"], "class:", data["class"])
+        s = s + " " + input()
+        data = model(s, machine_state=False)
 
-	print("text:", data["text"], "class:", data["class"], data["class_label"])
-	print(model)
+      print("text:", data["text"], "class:", data["class"], data["class_label"])
+      print(model)
+  except:
+    pass
