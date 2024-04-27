@@ -35,10 +35,10 @@ class CoPilot:
 			self.device = "cpu"
 
 		
-		self.answer_classifier = RubertTinyClassifier(30).to(self.device)
+		self.answer_classifier = RubertTinyClassifier(30).to(self.device).eval()
 		self.answer_classifier.load_state_dict(torch.load("./weights/RuBertAnswer.pt"))
 
-		self.category_classifier = RubertTinyClassifier(10).to(self.device)
+		self.category_classifier = RubertTinyClassifier(10).to(self.device).eval()
 		self.category_classifier.load_state_dict(torch.load("./weights/RuBertCategory.pt"))
 		self.tokenizer = AutoTokenizer.from_pretrained("cointegrated/rubert-tiny2")
 
