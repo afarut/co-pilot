@@ -8,7 +8,7 @@ warnings.filterwarnings("ignore")
 
 
 class CoPilot:
-	def __init__(self, alpha=0.03, e=0.2):
+	def __init__(self, alpha=0.05, e=0.2):
 		self.e = e
 		self.alpha = alpha
 
