@@ -1,6 +1,6 @@
 import torch
 from torch.nn.functional import softmax
-from utils import get_categories, get_summars
+from utils import get_categories, get_summars, get_answers
 from classifier import RubertTinyClassifier
 from transformers import AutoTokenizer, AutoModel, AutoModelForCausalLM
 import warnings
@@ -11,8 +11,8 @@ class CoPilot:
 	def __init__(self, alpha=0.05, e=0.2):
 		self.e = e
 		self.alpha = alpha
+		self.dota2 = get_answers("./datasets/summans.csv")
 
-		
 
 		self.categories = get_categories("./datasets/orig_train_data.csv")
 		self.categoriy_label = [
@@ -87,7 +87,7 @@ class CoPilot:
 					return {"status": "ok", 
 							"text": "Результат найден", 
 							"class": answers[0][0], 
-							"class_label": answers[0][1]}
+							"class_label": self.dota2[answers[0][0]]}
 				else:
 					if machine_state:
 						return {"status": "random", "text": "Нужен доп вопрос, Категория не соответствует клаасу ответа", "class": -1}
@@ -117,7 +117,7 @@ class CoPilot:
 			generated_ids = self.mistral.generate(model_inputs, max_new_tokens=30, do_sample=True, pad_token_id=self.mistral_tokenizer.pad_token_id, eos_token_id=self.mistral_tokenizer.eos_token_id)
 			decoded = self.mistral_tokenizer.batch_decode(generated_ids)
 			text = decoded[0]
-			return {"status": "random", "text": text, "class": -1}
+			return {"status": "random", "text": text.split("INST]")[-1].strip().replace("\"", "", 1), "class": -1}
 
 
 if __name__ == "__main__":

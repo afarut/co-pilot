@@ -21,3 +21,13 @@ def get_summars(file_path):
   for i in range(len(df)):
       data[answer_class[i]] = summ[i]
   return data
+
+
+def get_answers(file_path):
+  df = pd.read_csv(file_path)
+  data = [0] * len(df)
+  answer_class = df["answer_class"]
+  summ = df["Answer"]
+  for i in range(len(df)):
+      data[answer_class[i]] = summ[i]
+  return data
